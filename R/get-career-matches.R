@@ -38,21 +38,35 @@ fetch_player_dob <- function(base_url, slug) {
   as.Date(NA_character_)
 }
 
-get_career_matches <- function(player) {
+fetch_career_source <- function(base_url, player) {
   slug <- player_slug(player)
+  candidates <- slug
+  if (grepl("[[:space:]]", trimws(player))) {
+    candidates <- unique(c(slug, player_slug(tolower(player))))
+  }
+  for (candidate in candidates) {
+    address <- paste0(base_url, "/jsmatches/", candidate, "Career.js")
+    career <- read_tennis_abstract(address)
+    if (any(grepl("\\bmorematchmx\\s*=", career, perl = TRUE))) {
+      return(list(slug = candidate, career = career))
+    }
+  }
+  NULL
+}
+
+get_career_matches <- function(player) {
   base_url <- "https://www.tennisabstract.com"
-  career_url <- paste0(base_url, "/jsmatches/", slug, "Career.js")
-  career <- read_tennis_abstract(career_url)
-  if (!any(grepl("\\bmorematchmx\\s*=", career, perl = TRUE))) {
+  source <- fetch_career_source(base_url, player)
+  if (is.null(source)) {
     stop(sprintf(
       "Could not retrieve Tennis Abstract career matches for '%s'. Check the player name and your connection.",
       player
     ), call. = FALSE)
   }
-  dob <- fetch_player_dob(base_url, slug)
+  dob <- fetch_player_dob(base_url, source$slug)
   if (is.na(dob)) {
     stop(sprintf("Could not find a birth date for '%s' on Tennis Abstract.", player),
          call. = FALSE)
   }
-  clean_career_matches(career, dob)
+  clean_career_matches(source$career, dob)
 }
